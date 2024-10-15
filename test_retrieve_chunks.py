@@ -8,7 +8,7 @@ from src.answer_generation.generate_answer import initialize_ollama_connection, 
 
 # Sample file and query
 file_path = "data/uploads/sample.pdf"
-query_text = "List all latin species in the document."
+query_text = "List all"
 
 # Step 1: Extract, clean, and chunk text
 raw_text = extract_text_from_pdf(file_path)
