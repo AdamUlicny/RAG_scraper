@@ -1,22 +1,27 @@
 # src/embeddings/embed_text.py
 
-from sentence_transformers import SentenceTransformer
+from langchain.embeddings import OllamaEmbeddings
 
-def embed_text_chunks(chunks, model_name="all-MiniLM-L6-v2"):
+def embed_text_chunks(chunks):
     """
-    Embeds each text chunk using a local embedding model.
+    Embeds each text chunk using LangChain's Ollama integration.
     
     Parameters:
     chunks (list of str): List of text chunks to embed.
-    model_name (str): Name of the sentence-transformers model to use.
     
     Returns:
     list of list of float: A list of embedding vectors for each chunk.
     """
-    # Load the embedding model
-    model = SentenceTransformer(model_name)
-    
+    # Initialize the Ollama embeddings
+    embedding_model = OllamaEmbeddings(model="nomic-embed-text")  # Specify the model name
+
     # Generate embeddings for each chunk
-    embeddings = model.encode(chunks, show_progress_bar=True)
+    embeddings = embedding_model.embed_documents(chunks)
     
     return embeddings
+
+if __name__ == "__main__":
+    # Example text chunks; replace with actual text chunks to embed
+    text_chunks = ["This is the first chunk.", "Here is the second chunk."]
+    embeddings = embed_text_chunks(text_chunks)
+    print("Generated embeddings:", embeddings)

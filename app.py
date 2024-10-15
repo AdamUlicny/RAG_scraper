@@ -1,41 +1,47 @@
-import pdfplumber
-import fitz  # PyMuPDF
+import streamlit as st
+from src.pdf_processing.pdf_ingestion import ingest_pdf  # Import your PDF ingestion function
+from src.embeddings.embed_text import embed_text_chunks  # Import your embedding function
+from src.answer_generation.generate_answer import generate_answer  # Import your answer generation function
 
-def extract_text_from_pdf(file_path):
-    """
-    Extract text from a text-based PDF using pdfplumber and PyMuPDF.
-    
-    Parameters:
-    file_path (str): Path to the PDF file.
-    
-    Returns:
-    str: Extracted text from the PDF.
-    """
-    text = ""
+# Set up Streamlit app
+st.title("RAG App for Species Extraction from PDFs")
 
-    # Attempt to use pdfplumber for direct text extraction
-    try:
-        with pdfplumber.open(file_path) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text += page_text + "\n"
-    except Exception as e:
-        print("pdfplumber failed. Error:", e)
-        text = ""  # Reset text if pdfplumber fails
+# Upload PDF file
+uploaded_file = st.file_uploader("Upload a PDF file", type="pdf")
+if uploaded_file is not None:
+    text = ingest_pdf(uploaded_file)  # Function to extract text from the PDF
+    st.text_area("Extracted Text", text, height=300)
 
-    # If pdfplumber fails or returns no text, fall back to PyMuPDF
-    if not text.strip():
-        try:
-            pdf_document = fitz.open(file_path)
-            for page_num in range(pdf_document.page_count):
-                page = pdf_document[page_num]
-                text += page.get_text() + "\n"
-        except Exception as e:
-            print("PyMuPDF also failed. Error:", e)
-    
-    return text.strip()
+# Choose embedding model
+embedding_model = st.selectbox("Select Embedding Model", ["nomic-embed-text", "other_model_1", "other_model_2"])
 
-# Example usage
-pdf_text = extract_text_from_pdf("sample.pdf")
-print(pdf_text[:500])  # Print the first 500 characters to check the output
+# Generate embeddings
+if st.button("Generate Embeddings"):
+    if uploaded_file is not None:
+        chunks = text.split("\n")  # Split text into chunks; you can improve this logic
+        embeddings = embed_text_chunks(chunks)  # Embed the chunks
+        st.success("Embeddings generated successfully!")
+    else:
+        st.error("Please upload a PDF file first.")
+
+# Choose LLM model
+llm_model = st.selectbox("Select LLM Model", ["model1", "model2", "model3"])
+
+# Change prompt
+prompt = st.text_input("Change Prompt", "What are the species mentioned in the text?")
+
+# Generate answer
+if st.button("Generate Answer"):
+    if uploaded_file is not None:
+        answer = generate_answer("http://localhost:11434", prompt, text)  # Adjust URL as needed
+        st.write("Generated Answer:")
+        st.success(answer)
+    else:
+        st.error("Please upload a PDF file first.")
+
+# Delete embeddings
+if st.button("Delete Embeddings"):
+    # Implement the logic to delete embeddings here
+    st.success("Embeddings deleted successfully!")
+
+# Additional functionality could be added as needed
