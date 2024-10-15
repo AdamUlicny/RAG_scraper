@@ -2,7 +2,7 @@
 
 import re
 
-def chunk_text(text, chunk_size=1500, chunk_overlap=50):
+def chunk_text(text, chunk_size, chunk_overlap):
     """
     Splits the text into overlapping chunks of specified size.
     
