@@ -1,16 +1,11 @@
 import streamlit as st
 import pdfplumber
 import re
-import json
-import csv
-import pandas as pd
 import subprocess
 import tempfile
 from src.answer_generation.generate_answer import generate_answer, initialize_ollama_connection
 from streamlit import session_state
 from streamlit_pdf_viewer import pdf_viewer
-from scraper import extract_scientific_names_and_threats
-from inspect import getsource
 
 # Set up Streamlit app
 st.title("PDF Data Extraction and Script Generation App")
@@ -41,35 +36,46 @@ if uploaded_file:
         # Store the page text for later use
     st.session_state["page_text"] = page_text
 
+script_path = "/home/adam/CODE/RAG_scraper/scraper.py"
+
+# Read the entire file into a string
+with open(script_path, "r") as file:
+    original_script = file.read()
+
 output_path = st.text_input("Specify Output Path (e.g., /tmp/scraped_data.csv or /tmp/scraped_data.json)")
+
 # Step 4: Define Prompt for Data Extraction
 if uploaded_file and "page_text" in st.session_state:
     # User instruction for prompting
-    script_text = getsource(extract_scientific_names_and_threats)
-    context = page_text
+    context = st.session_state["page_text"]
+    
     user_instruction = st.text_input("Describe the data to extract from the PDF page")
     question = f"""
-    Update the provided Python scraping script to extract the following data from the PDF file:
-    Provided Python script: {script_text}
-    Data to extract: {user_instruction}
+I have the following Python script:
 
-    Use the following example page to infer the structure and format of data on each page:
-    {context}
+{original_script}
+
+Please update this script according to the following requirements:
+- {user_instruction}
+- consider file text structure in sample: {context}
+- The updated script should keep the existing structure but add the new functionality as specified.
+- Ensure that both the text and tables are saved to their respective output formats.
     """
+    
     # Optional llm models
     llm_models = [
-    "llama3.2:latest", 
-    "deepseek-coder-v2", 
-    "qwen2.5:14b",
-    "mistral:7b",
-]
+        "llama3.2:latest",
+        "deepseek-coder-v2",
+        "qwen2.5:14b",
+        "mistral:7b"
+    ]
+    
     # Choose LLM model
-    llm_model = st.selectbox("Select LLM Model", llm_models)
-
-    # Step 5: Generate Script with Ollama
+    selected_llm_model = st.selectbox("Select LLM Model", llm_models)
+    
     if st.button("Generate Python Script"):
         base_url = initialize_ollama_connection()  # Connect to Ollama API
-        response_text = generate_answer(base_url, question, llm_model)  # Generate script using Ollama
+        response_text = generate_answer(base_url, question, selected_llm_model)
         
         if "Error" in response_text:
             st.error(response_text)
@@ -78,24 +84,22 @@ if uploaded_file and "page_text" in st.session_state:
             code_block_match = re.search(r"```python(.*?)```", response_text, re.DOTALL)
             if code_block_match:
                 # Get the code from within the code block
-                script_text = code_block_match.group(1).strip()
+                script_code = code_block_match.group(1).strip()
                 st.subheader("Generated Python Script:")
-                st.code(script_text, language="python")
+                st.code(script_code, language="python")
                 
                 # Store in session state for execution
-                st.session_state["generated_script"] = script_text
+                script_text = st.session_state["generated_script"]
             else:
                 st.warning("No code block found in response.")
 
-# Step 7: Execute the Generated Script with Subprocess
+# Execute the Generated Script with Subprocess
 def run_generated_script(script_code, pdf_file_path, output_path):
     with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as temp_script_file:
-        # Write the code to a temporary script file
         temp_script_file.write(script_code.encode("utf-8"))
         temp_script_file_path = temp_script_file.name
 
     try:
-        # Run the script as a subprocess and capture any output or errors
         result = subprocess.run(
             ["python", temp_script_file_path, pdf_file_path, output_path],
             capture_output=True,
@@ -103,7 +107,6 @@ def run_generated_script(script_code, pdf_file_path, output_path):
             check=True
         )
         
-        # Display output and errors if any
         st.success(f"Script executed successfully. Data saved at {output_path}")
         if result.stdout:
             st.text_area("Script Output", result.stdout, height=200)
@@ -115,15 +118,12 @@ def run_generated_script(script_code, pdf_file_path, output_path):
         st.text(e.stderr)
     
     finally:
-        # Clean up temporary script file
         temp_script_file.close()
 
 if "generated_script" in st.session_state and output_path:
     if st.button("Run Script for Entire PDF"):
-        # Save the uploaded PDF file to a temporary path
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf_file:
             temp_pdf_file.write(uploaded_file.read())
             pdf_file_path = temp_pdf_file.name
         
-        # Run the generated script as a subprocess
         run_generated_script(st.session_state["generated_script"], pdf_file_path, output_path)
