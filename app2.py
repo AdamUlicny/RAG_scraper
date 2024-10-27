@@ -2,9 +2,10 @@ import streamlit as st
 import pdfplumber
 import re
 import json
-import fitz  # PyMuPDF
 import csv
 import pandas as pd
+import subprocess
+import tempfile
 from src.answer_generation.generate_answer import generate_answer, initialize_ollama_connection
 from streamlit import session_state
 from streamlit_pdf_viewer import pdf_viewer
@@ -62,8 +63,6 @@ if uploaded_file and "page_text" in st.session_state:
     "qwen2.5:14b",
     "mistral:7b",
 ]
-
-
     # Choose LLM model
     llm_model = st.selectbox("Select LLM Model", llm_models)
 
@@ -76,7 +75,7 @@ if uploaded_file and "page_text" in st.session_state:
             st.error(response_text)
         else:
             # Extract the code block between triple backticks
-            code_block_match = re.search(r"```(.*?)```", response_text, re.DOTALL)
+            code_block_match = re.search(r"```python(.*?)```", response_text, re.DOTALL)
             if code_block_match:
                 # Get the code from within the code block
                 script_text = code_block_match.group(1).strip()
@@ -88,24 +87,43 @@ if uploaded_file and "page_text" in st.session_state:
             else:
                 st.warning("No code block found in response.")
 
-# Step 5: Execute the Generated Script with Output Specifications
-def run_generated_script(script_code, pdf_file, output_path):
-    # Prepare local namespace with pdf file and output path for exec()
-    local_vars = {"uploaded_file": pdf_file, "output_path": output_path}
+# Step 7: Execute the Generated Script with Subprocess
+def run_generated_script(script_code, pdf_file_path, output_path):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as temp_script_file:
+        # Write the code to a temporary script file
+        temp_script_file.write(script_code.encode("utf-8"))
+        temp_script_file_path = temp_script_file.name
+
+    try:
+        # Run the script as a subprocess and capture any output or errors
+        result = subprocess.run(
+            ["python", temp_script_file_path, pdf_file_path, output_path],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # Display output and errors if any
+        st.success(f"Script executed successfully. Data saved at {output_path}")
+        if result.stdout:
+            st.text_area("Script Output", result.stdout, height=200)
+        if result.stderr:
+            st.text_area("Script Errors", result.stderr, height=200)
+
+    except subprocess.CalledProcessError as e:
+        st.error("Error running script:")
+        st.text(e.stderr)
     
-    # Execute the script in the local scope with defined variables
-    exec(script_code, {}, local_vars)
+    finally:
+        # Clean up temporary script file
+        temp_script_file.close()
 
 if "generated_script" in st.session_state and output_path:
     if st.button("Run Script for Entire PDF"):
-        run_generated_script(st.session_state["generated_script"], uploaded_file, output_path)
-        st.success(f"Script executed and data saved at {output_path}")
-
-        # Display results based on output format
-        if output_format == "CSV":
-            result_data = pd.read_csv(output_path)
-            st.dataframe(result_data)
-        elif output_format == "JSON":
-            with open(output_path, "r") as f:
-                result_data = json.load(f)
-            st.json(result_data)
+        # Save the uploaded PDF file to a temporary path
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf_file:
+            temp_pdf_file.write(uploaded_file.read())
+            pdf_file_path = temp_pdf_file.name
+        
+        # Run the generated script as a subprocess
+        run_generated_script(st.session_state["generated_script"], pdf_file_path, output_path)

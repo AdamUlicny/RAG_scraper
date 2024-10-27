@@ -9,10 +9,11 @@ def initialize_ollama_connection(base_url="http://localhost:11434"):
 def generate_answer(base_url, question, llm_model):
     prompt = f"""
 ### Task:
+Follow instruction given in:
 {question}
 
 ### Expected Output:
-Python code that accomplishes the task.
+Updated Python code that accomplishes the task. Valid codeblock that can be saved as temporary file.py.
 """
     payload = {
         "model": llm_model,
