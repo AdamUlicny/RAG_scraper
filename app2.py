@@ -2,10 +2,14 @@ import streamlit as st
 import pdfplumber
 import re
 import json
+import fitz  # PyMuPDF
+import csv
 import pandas as pd
 from src.answer_generation.generate_answer import generate_answer, initialize_ollama_connection
 from streamlit import session_state
 from streamlit_pdf_viewer import pdf_viewer
+from scraper import extract_scientific_names_and_threats
+from inspect import getsource
 
 # Set up Streamlit app
 st.title("PDF Data Extraction and Script Generation App")
@@ -36,18 +40,20 @@ if uploaded_file:
         # Store the page text for later use
     st.session_state["page_text"] = page_text
 
+output_path = st.text_input("Specify Output Path (e.g., /tmp/scraped_data.csv or /tmp/scraped_data.json)")
 # Step 4: Define Prompt for Data Extraction
 if uploaded_file and "page_text" in st.session_state:
     # User instruction for prompting
+    script_text = getsource(extract_scientific_names_and_threats)
     context = page_text
-    user_instruction = st.text_input("Describe the data to extract (e.g., 'Extract table of species and their threat levels')")
+    user_instruction = st.text_input("Describe the data to extract from the PDF page")
     question = f"""
-    Generate a Python script that iterates through each page of a PDF to extract the following data, and saves all results in {output_format} format at the specified path:
-    
+    Update the provided Python scraping script to extract the following data from the PDF file:
+    Provided Python script: {script_text}
     Data to extract: {user_instruction}
-    Example page from PDF: {context}
 
-    The PDF file is provided as a variable `uploaded_file`.
+    Use the following example page to infer the structure and format of data on each page:
+    {context}
     """
     # Optional llm models
     llm_models = [
@@ -61,13 +67,10 @@ if uploaded_file and "page_text" in st.session_state:
     # Choose LLM model
     llm_model = st.selectbox("Select LLM Model", llm_models)
 
-    output_format = st.selectbox("Select Output Format", ["CSV", "JSON"])
-    output_path = st.text_input("Specify Output Path (e.g., /tmp/scraped_data.csv or /tmp/scraped_data.json)")
-
     # Step 5: Generate Script with Ollama
     if st.button("Generate Python Script"):
         base_url = initialize_ollama_connection()  # Connect to Ollama API
-        response_text = generate_answer(base_url, question, context, llm_model)  # Generate script using Ollama
+        response_text = generate_answer(base_url, question, llm_model)  # Generate script using Ollama
         
         if "Error" in response_text:
             st.error(response_text)

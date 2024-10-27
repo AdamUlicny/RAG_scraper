@@ -6,10 +6,16 @@ import json  # Import the json module for parsing
 def initialize_ollama_connection(base_url="http://localhost:11434"):
     return base_url
 
-def generate_answer(base_url, question, context, llm_model):
-    prompt = f"\n\nContext:\n{context}\n\nQuestion: {question}\nAnswer:"
+def generate_answer(base_url, question, llm_model):
+    prompt = f"""
+### Task:
+{question}
+
+### Expected Output:
+Python code that accomplishes the task.
+"""
     payload = {
-        "model": llm_model,  # Replace with the specific model you are using
+        "model": llm_model,
         "prompt": prompt,
         "stream":False  # Expecting JSON response
     }
