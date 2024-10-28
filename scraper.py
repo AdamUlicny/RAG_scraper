@@ -1,5 +1,5 @@
 import fitz  # PyMuPDF
-import csv
+import csv # neccessary to output csv file
 uploaded_file = "/home/adam/Downloads/BGD_Animalia_Mammals_2015.pdf"
 output_path = "/home/adam/Downloads/extracted_data.csv"
 

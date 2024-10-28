@@ -89,14 +89,29 @@ Please update this script according to the following requirements:
                 st.code(script_code, language="python")
                 
                 # Store in session state for execution
-                script_text = st.session_state["generated_script"]
+                st.session_state["generated_script"] = script_code
             else:
                 st.warning("No code block found in response.")
 
+def clean_script_code(script_code):
+    """
+    Cleans the generated script code by:
+    - Converting escaped quotes (\\") back to normal quotes (")
+    - Converting escaped newline characters (\\n) to actual newlines
+    - Converting escaped unicode characters (e.g., \\u003c) to their corresponding symbols
+    """
+    # Convert escaped quotes and newlines
+    script_code = script_code.replace('\\"', '"').replace("\\n", "\n").replace("\\t", "\t")
+    
+    # Decode any escaped unicode characters (e.g., \u003c for <)
+    script_code = bytes(script_code, "utf-8").decode("unicode_escape")
+    
+    return script_code
 # Execute the Generated Script with Subprocess
 def run_generated_script(script_code, pdf_file_path, output_path):
+    cleaned_script_code = clean_script_code(script_code)
     with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as temp_script_file:
-        temp_script_file.write(script_code.encode("utf-8"))
+        temp_script_file.write(cleaned_script_code.encode("utf-8"))
         temp_script_file_path = temp_script_file.name
 
     try:
