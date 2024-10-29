@@ -1,7 +1,9 @@
 import streamlit as st
 import pdfplumber
 import re
+import os
 import subprocess
+import tempfile
 import tempfile
 from src.answer_generation.generate_answer import generate_answer, initialize_ollama_connection
 from streamlit import session_state
@@ -12,7 +14,13 @@ st.title("PDF Data Extraction and Script Generation App")
 
 # Step 1: Upload PDF File
 uploaded_file = st.file_uploader("Upload a PDF file", type="pdf")
-# Step 2: View PDF file
+if uploaded_file:
+        temp_dir = tempfile.mkdtemp()
+        temp_pdf_path = os.path.join(temp_dir, uploaded_file.name)
+        with open(temp_pdf_path, "wb") as f:
+                f.write(uploaded_file.getvalue())
+
+# View PDF file
 if uploaded_file:
     # Save the uploaded file to a temporary location
     binary_data=uploaded_file.read()
@@ -36,7 +44,9 @@ if uploaded_file:
         # Store the page text for later use
     st.session_state["page_text"] = page_text
 
-script_path = "/home/adam/CODE/RAG_scraper/scraper.py"
+#PC script_path = "/home/adam/CODE/RAG_scraper/scraper.py"
+#ntb
+script_path = "/home/adam/Documents/CODE/RAG_scratch/scraper.py"
 
 # Read the entire file into a string
 with open(script_path, "r") as file:
@@ -44,7 +54,7 @@ with open(script_path, "r") as file:
 
 output_path = st.text_input("Specify Output Path (e.g., /tmp/scraped_data.csv or /tmp/scraped_data.json)")
 
-# Step 4: Define Prompt for Data Extraction
+#Define Prompt for Data Extraction
 if uploaded_file and "page_text" in st.session_state:
     # User instruction for prompting
     context = st.session_state["page_text"]
@@ -58,16 +68,25 @@ I have the following Python script:
 Please update this script according to the following requirements:
 - {user_instruction}
 - consider file text structure in sample: {context}
+- use the path provided in {temp_pdf_path} for input path
+- use the path provided in {output_path} for output path
+- provide well formatted codeblock, no instructions, no explainers.
+- ensure the script for errors, the script should be executable as-is
 - The updated script should keep the existing structure but add the new functionality as specified.
 - Ensure that both the text and tables are saved to their respective output formats.
     """
     
-    # Optional llm models
+    # Optional LLM models
     llm_models = [
         "llama3.2:latest",
         "deepseek-coder-v2",
         "qwen2.5:14b",
-        "mistral:7b"
+        "mistral:7b",
+        "codellama:latest",
+        "qwen2.5:1.5b",
+        "qwen2.5:1.5b-instruct",
+        "llama3.2:3b",
+        "llama3.2:3b-instruct-fp16"
     ]
     
     # Choose LLM model
@@ -93,20 +112,96 @@ Please update this script according to the following requirements:
             else:
                 st.warning("No code block found in response.")
 
+
 def clean_script_code(script_code):
     """
     Cleans the generated script code by:
-    - Converting escaped quotes (\\") back to normal quotes (")
-    - Converting escaped newline characters (\\n) to actual newlines
-    - Converting escaped unicode characters (e.g., \\u003c) to their corresponding symbols
+    - Preserving specific lines with newline characters in the input string
+    - Converting escaped quotes (\") back to normal quotes selectively
+    - Converting escaped newline (\n) and tab (\t) characters to actual newlines and tabs
+    - Converting escaped unicode characters (e.g., \u003c) to their corresponding symbols
+    - Handling multi-line strings and ensuring balanced quotes
+    
+    Args:
+        script_code (str): The input script code to clean
+        
+    Returns:
+        str: The cleaned script code
     """
-    # Convert escaped quotes and newlines
-    script_code = script_code.replace('\\"', '"').replace("\\n", "\n").replace("\\t", "\t")
+    if not script_code:
+        return ""
     
-    # Decode any escaped unicode characters (e.g., \u003c for <)
-    script_code = bytes(script_code, "utf-8").decode("unicode_escape")
+    # Step 1: Preserve specific lines with newline characters
+    lines = script_code.split("\n")
+    cleaned_lines = []
+    for line in lines:
+        if "lines = text.split(\"\\n\")" in line:
+            cleaned_lines.append(line)
+        else:
+            # Convert other lines
+            line = line.replace("\\n", "\n")
+            line = re.sub(r'\\"', '"', line)
+            line = line.replace("\\t", "\t")
+            try:
+                line = bytes(line, "utf-8").decode("unicode_escape")
+            except UnicodeDecodeError:
+                pass
+            cleaned_lines.append(line)
     
-    return script_code
+    # Step 2: Handle balanced quotes and multi-line strings for the remaining lines
+    balanced_lines = []
+    open_quote = None
+    current_line = ""
+    
+    for line in cleaned_lines:
+        if not line:
+            balanced_lines.append("")
+            continue
+            
+        if open_quote:
+            # We're inside a multi-line string
+            current_line += "\n" + line
+            
+            # Check if this line contains the closing quote
+            quote_positions = [i for i, char in enumerate(line) if char == open_quote]
+            for pos in quote_positions:
+                # Make sure it's not escaped
+                if pos > 0 and line[pos-1] != "\\":
+                    balanced_lines.append(current_line)
+                    current_line = line[pos+1:]
+                    open_quote = None
+                    break
+                    
+            if open_quote:  # Still open
+                continue
+                
+        else:
+            current_line = line
+            
+        # Look for new quote openings
+        for char in ['"', "'"]:
+            quote_positions = [i for i, c in enumerate(current_line) if c == char]
+            quote_count = len(quote_positions)
+            
+            if quote_count % 2 == 1:  # Odd number of quotes
+                # Find the position of the last quote
+                last_quote_pos = quote_positions[-1]
+                # Check if it's not escaped
+                if last_quote_pos == 0 or current_line[last_quote_pos-1] != "\\":
+                    open_quote = char
+                    break
+        
+        if not open_quote:
+            balanced_lines.append(current_line)
+        else:
+            current_line = line
+            
+    # Handle any remaining open quotes
+    if current_line:
+        balanced_lines.append(current_line)
+    
+    return "\n".join(balanced_lines)
+
 # Execute the Generated Script with Subprocess
 def run_generated_script(script_code, pdf_file_path, output_path):
     cleaned_script_code = clean_script_code(script_code)
@@ -132,8 +227,6 @@ def run_generated_script(script_code, pdf_file_path, output_path):
         st.error("Error running script:")
         st.text(e.stderr)
     
-    finally:
-        temp_script_file.close()
 
 if "generated_script" in st.session_state and output_path:
     if st.button("Run Script for Entire PDF"):
