@@ -1,33 +1,60 @@
-# test_retrieve_chunks.py
+import fitz  # PyMuPDF
+import csv  # necessary to output CSV file
 
-from src.pdf_processing.extract_text import extract_text_from_pdf
-from src.text_processing.clean_text import clean_text
-from src.text_processing.chunk_text import chunk_text
-from src.retrieval.retrieve_chunks import initialize_chroma_collection, add_chunks_to_chroma, retrieve_similar_chunks
 
-# Sample file and sample query
-file_path = "data/uploads/sample.pdf"
-query_text = "What is the main topic of the document?"
+uploaded_file = "/home/adam/Downloads/BGD_Animalia_Mammals_2015.pdf"
+output_path = "/home/adam/BGD_Animalia_Mammals_2015.csv"
 
-# Step 1: Extract raw text from PDF
-raw_text = extract_text_from_pdf(file_path)
+def extract_scientific_names_and_threats(uploaded_file, output_path):
+    document = fitz.open(uploaded_file)
+    
+    # Prepare data to write to CSV
+    with open(output_path, "w", newline="", encoding="utf-8") as csvfile:
+        writer = csv.writer(csvfile)
+        
+        # Write header columns
+        writer.writerow(["Scientific Name", "Threat Category", "English Name", "Local Name"])
+        
+        for page_num in range(len(document)):
+            page = document.load_page(page_num)
+            
+            # Extract text from the page
+            text = page.get_text("text")
+            
+            lines = text.split("\n")
+            
+            scientific_name = None
+            threat_category = None
+            english_name = None
+            local_name = None
+            
+            for line in lines:
+                if "Scientific Name:" in line:
+                    name_part = line.replace("Scientific Name:", "").strip()
+                    
+                    # Ensure that only the first two parts are captured, which should be the species name
+                    parts = name_part.split(' ')
+                    scientific_name = ' '.join(parts[:2])  # Take exactly the first two words
+                    
+                elif "<" in line and ">" in line:
+                    threat_category = line.strip("<>").strip()
+                    
+                elif "English Name:" in line:
+                    english_name_part = line.replace("English Name:", "").strip()
+                    
+                    # Ensure that only one part is captured, which should be the English name
+                    parts = english_name_part.split(' ')
+                    english_name = ' '.join(parts[:2])  # Take exactly the first two words
+                    
+                elif "Local Name:" in line:
+                    local_name_part = line.replace("Local Name:", "").strip()
+                    
+                    # Ensure that only one part is captured, which should be the Local name
+                    parts = local_name_part.split(' ')
+                    local_name = ' '.join(parts[:2])  # Take exactly the first two words
+                    
+            if scientific_name is not None and threat_category is not None:
+                writer.writerow([scientific_name, threat_category, english_name, local_name])
 
-# Step 2: Clean the extracted text
-cleaned_text = clean_text(raw_text)
-
-# Step 3: Chunk the cleaned text
-chunks = chunk_text(cleaned_text, chunk_size=500, chunk_overlap=50)
-
-# Step 4: Initialize ChromaDB collection
-collection = initialize_chroma_collection("test_document_chunks")
-
-# Step 5: Add chunks to the ChromaDB collection
-add_chunks_to_chroma(chunks, collection)
-
-# Step 6: Retrieve similar chunks based on the query
-similar_chunks = retrieve_similar_chunks(query_text, collection, top_k=3)
-
-# Print the top relevant chunks
-print("Top relevant chunks:")
-for result in similar_chunks:
-    print(result["chunk"])
+# Example usage
+extract_scientific_names_and_threats(uploaded_file, output_path)
