@@ -15,7 +15,9 @@ def generate_answer(base_url, question, llm_model):
     payload = {
         "model": llm_model,
         "prompt": question,
-        "stream": False
+        "stream": False,
+        "format": "json",
+        "temperature": 0
     }
 
     try:
@@ -23,7 +25,7 @@ def generate_answer(base_url, question, llm_model):
         response.raise_for_status()
         
         # Assuming the API returns plain text as the answer.
-        return response.text.strip()
+        return response.json()
 
     except requests.exceptions.RequestException as e:
         print(f"Error connecting to Ollama API: {e}")

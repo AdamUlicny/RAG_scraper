@@ -52,20 +52,18 @@ if uploaded_file and "page_text" in st.session_state:
     
     user_instruction = st.text_input("Describe the data to extract from the PDF page")
     question = f"""
-Generate a Python script base on {original_script}
+Update the provided Python script {original_script}
+to extract the following data: {user_instruction} 
+based on the provided sample page: {context}
 
-Please update this script according to the following requirements:
-- {user_instruction}
-- consider file text structure in sample: {context}
-
-Return the response in JSON format with the following structure:
+Please return the response in valid structured JSON format as follows: 
 {{
-    "code": "```python\\n<your Python code here>\\n```"
+    "code":```<Updated Code Here>```
 }}
-
-- Use triple backticks to format the Python code within the "code" field.
-- Ensure the code begins with `python` inside the backticks (e.g., ```python).
-    """
+- update the existing script to extract the data as described
+- The code should be formatted without additional newline characters (`\n`) or escape sequences unless absolutely necessary.
+- Return the code in a single JSON-compatible string without additional formatting.
+"""
     
     # Optional llm models
     llm_models = [
@@ -96,7 +94,7 @@ Return the response in JSON format with the following structure:
             except json.JSONDecodeError:
                 st.error("Failed to parse JSON response from the API.")
                 response_json = None
-        
+
         # Step 2: Process the parsed JSON
         if response_json:
             # Check if an error field is present
@@ -105,25 +103,25 @@ Return the response in JSON format with the following structure:
                 print("Error in Response:", response_json["error"])  # Log error to console
 
             # Try to extract the code field
-            elif "code" in response_json:
-                # Extract the code block from JSON
-                code_text = response_json["code"].strip()
+            elif "response" in response_json:
+                response_text = response_json["response"]
 
-                # Use regex to find code block within triple backticks if they exist
-                code_block_match = re.search(r"```python(.*?)```", code_text, re.DOTALL)
-                script_text = code_block_match.group(1).strip() if code_block_match else code_text
+        # Use regex to find code block within triple backticks labeled as python
+        code_block_match = re.search(r"```(.*?)```", response_text, re.DOTALL)
 
-                # Display and store the extracted code
-                st.subheader("Generated Python Script:")
-                st.code(script_text, language="python")
-                st.session_state["generated_script"] = script_text  # Store for execution
+        if code_block_match:
+            script_text = code_block_match.group(1).strip()
 
-            else:
-                # If "code" field is not found, display the entire JSON response
-                st.warning("No 'code' field found in JSON response.")
-                st.write("Full JSON response for inspection:", response_json)
-                print("Full JSON response:", response_json)  # Log to console for debugging
+            # Display and store the extracted code
+            st.subheader("Generated Python Script:")
+            st.code(script_text, language="python")
+            st.session_state["generated_script"] = script_text  # Store for execution
 
+        else:
+            # If "code" field is not found, display the entire JSON response
+            st.warning("No 'code' field found in JSON response.")
+            st.write("Full JSON response for inspection:", response_json)
+            print("Full JSON response:", response_json)  # Log to console for debugging
 
 # Execute the Generated Script with Subprocess
 def run_generated_script(script_code, pdf_file_path, output_path):
