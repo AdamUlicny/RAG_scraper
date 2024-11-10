@@ -5,7 +5,6 @@ import re
 import subprocess
 import tempfile
 from src.answer_generation.generate_answer import generate_answer, initialize_ollama_connection
-from streamlit import session_state
 from streamlit_pdf_viewer import pdf_viewer
 
 # Set up Streamlit app
@@ -37,7 +36,7 @@ if uploaded_file:
         # Store the page text for later use
     st.session_state["page_text"] = page_text
 
-script_path = "/home/adam/CODE/RAG_scraper/scraper.py"
+script_path = "scraper.py"
 
 # Read the entire file into a string
 with open(script_path, "r") as file:
@@ -56,13 +55,9 @@ Update the provided Python script {original_script}
 to extract the following data: {user_instruction} 
 based on the provided sample page: {context}
 
-Please return the response in valid structured JSON format as follows: 
-{{
-    "code":```<Updated Code Here>```
-}}
-- update the existing script to extract the data as described
-- The code should be formatted without additional newline characters (`\n`) or escape sequences unless absolutely necessary.
-- Return the code in a single JSON-compatible string without additional formatting.
+Ensure correct JSON formatting. Updates script shall be 
+Do not include any comments or linebreaks in the code.
+In the codeblock, ensure correct indentation and formatting.
 """
     
     # Optional llm models
@@ -70,7 +65,12 @@ Please return the response in valid structured JSON format as follows:
         "llama3.2:latest",
         "deepseek-coder-v2",
         "qwen2.5:14b",
-        "mistral:7b"
+        "mistral:7b",
+        "codellama:latest",
+        "qwen2.5:1.5b",
+        "qwen2.5:1.5b-instruct",
+        "llama3.2:3b",
+        "llama3.2:3b-instruct-fp16"
     ]
     
     # Choose LLM model

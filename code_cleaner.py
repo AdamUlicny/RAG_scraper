@@ -3,7 +3,7 @@ import re
 def clean_script_code(script_code):
     """
     Cleans the generated script code by:
-    - Preserving lines with newline characters in the input string
+    - Preserving specific lines with newline characters in the input string
     - Converting escaped quotes (\") back to normal quotes selectively
     - Converting escaped newline (\n) and tab (\t) characters to actual newlines and tabs
     - Converting escaped unicode characters (e.g., \u003c) to their corresponding symbols
@@ -18,11 +18,11 @@ def clean_script_code(script_code):
     if not script_code:
         return ""
     
-    # Step 1: Preserve lines with newline characters
+    # Step 1: Preserve specific lines with newline characters
     lines = script_code.split("\n")
     cleaned_lines = []
     for line in lines:
-        if "\n" in line:
+        if "lines = text.split(\"\\n\")" in line:
             cleaned_lines.append(line)
         else:
             # Convert other lines
