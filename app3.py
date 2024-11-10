@@ -1,9 +1,11 @@
+import requests
 import streamlit as st
 import json
 import pdfplumber
 import re
 import subprocess
 import tempfile
+import logging
 from src.answer_generation.generate_answer import generate_answer, initialize_ollama_connection
 from streamlit_pdf_viewer import pdf_viewer
 
@@ -51,17 +53,21 @@ if uploaded_file and "page_text" in st.session_state:
     
     user_instruction = st.text_input("Describe the data to extract from the PDF page")
     question = f"""
-Update the provided Python script {original_script}
-to extract the following data: {user_instruction} 
-based on the provided sample page: {context}
+Your task is to update a scraping script to extract specified data from a PDF document.
+Script to update: {original_script}
 
-Ensure correct JSON formatting. Updates script shall be 
-Do not include any comments or linebreaks in the code.
+Data to extract: {user_instruction} 
+
+Sample page to understand text structure: {context}
+
+Instead of \n for new lines, use the actual newline character. This is very important.
+Make sure the updated code will be able to run as a standalone script.
 In the codeblock, ensure correct indentation and formatting.
 """
     
     # Optional llm models
     llm_models = [
+        "llama3.1",
         "llama3.2:latest",
         "deepseek-coder-v2",
         "qwen2.5:14b",
@@ -80,48 +86,28 @@ In the codeblock, ensure correct indentation and formatting.
     if st.button("Generate Python Script"):
         base_url = initialize_ollama_connection()
         response_text = generate_answer(base_url, question, selected_llm_model)
-        
+
         # Display the raw response text for debugging purposes
         st.write("Raw Response from LLM:", response_text)  # Display in Streamlit
-        print("Raw Response from LLM:", response_text)  # Print to console
-
-        # Step 1: Check if response_text is already a dict
-        if isinstance(response_text, dict):
-            response_json = response_text  # Already a dictionary, no need for json.loads()
-        else:
-            try:
-                response_json = json.loads(response_text)  # Parse if it's a string
-            except json.JSONDecodeError:
-                st.error("Failed to parse JSON response from the API.")
-                response_json = None
-
-        # Step 2: Process the parsed JSON
-        if response_json:
-            # Check if an error field is present
-            if "error" in response_json:
-                st.error(response_json["error"])
-                print("Error in Response:", response_json["error"])  # Log error to console
-
-            # Try to extract the code field
-            elif "response" in response_json:
-                response_text = response_json["response"]
-
-        # Use regex to find code block within triple backticks labeled as python
-        code_block_match = re.search(r"```(.*?)```", response_text, re.DOTALL)
-
-        if code_block_match:
-            script_text = code_block_match.group(1).strip()
-
-            # Display and store the extracted code
-            st.subheader("Generated Python Script:")
-            st.code(script_text, language="python")
-            st.session_state["generated_script"] = script_text  # Store for execution
-
-        else:
-            # If "code" field is not found, display the entire JSON response
-            st.warning("No 'code' field found in JSON response.")
-            st.write("Full JSON response for inspection:", response_json)
-            print("Full JSON response:", response_json)  # Log to console for debugging
+        print("Raw Response from LLM:", response_text) # Display in console
+        # Step 1: Check if response_text contains the updated code
+        try:
+            # Extract the code part from the response text using a specific symbol
+            code_start = response_text.find("###START_CODE###") + len("###START_CODE###")
+            code_end = response_text.find("###END_CODE###", code_start)
+            if code_start != -1 and code_end != -1:
+                generated_code = response_text[code_start:code_end].strip()
+                st.session_state["generated_script"] = generated_code
+            else:
+                st.error("Error: Code markers not found in the response text.")
+        
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Error connecting to Ollama API: {e}")
+            st.error("Error connecting to Ollama API.")
+        
+        except json.JSONDecodeError:
+            logging.error("Failed to decode JSON:", response_text)
+            st.error("Error: Unexpected response format from Ollama API.")
 
 # Execute the Generated Script with Subprocess
 def run_generated_script(script_code, pdf_file_path, output_path):

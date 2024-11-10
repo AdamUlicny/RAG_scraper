@@ -46,7 +46,7 @@ if uploaded_file:
 
 #PC script_path = "/home/adam/CODE/RAG_scraper/scraper.py"
 #ntb
-script_path = "/home/adam/Documents/CODE/RAG_scratch/scraper.py"
+script_path = "scraper.py"
 
 # Read the entire file into a string
 with open(script_path, "r") as file:
@@ -61,19 +61,17 @@ if uploaded_file and "page_text" in st.session_state:
     
     user_instruction = st.text_input("Describe the data to extract from the PDF page")
     question = f"""
-I have the following Python script:
+You are tasked with updating a provided Python script to extract specified data from a PDF.
+This is the script to update: {original_script}
 
-{original_script}
+The goal is to extract this data: {user_instruction}
 
-Please update this script according to the following requirements:
-- {user_instruction}
-- consider file text structure in sample: {context}
-- use the path provided in {temp_pdf_path} for input path
-- use the path provided in {output_path} for output path
-- provide well formatted codeblock, no instructions, no explainers.
-- ensure the script for errors, the script should be executable as-is
-- The updated script should keep the existing structure but add the new functionality as specified.
-- Ensure that both the text and tables are saved to their respective output formats.
+Sample page to understand the text structure: {context}
+
+Use this string {output_path} as output path.
+Important:
+- provide well formatted codeblock, no instructions, no explainers, no comments.
+- format the code as a single markdown formatted codeblock.
     """
     
     # Optional LLM models
