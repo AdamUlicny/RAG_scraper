@@ -62,11 +62,9 @@ if uploaded_file and "page_text" in st.session_state:
     user_instruction = st.text_input("Describe the data to extract from the PDF page")
     question = f"""
 You are tasked with updating a provided Python script to extract specified data from a PDF.
-This is the script to update: {original_script}
-
-The goal is to extract this data: {user_instruction}
-
 Sample page to understand the text structure: {context}
+This is the script to update: {original_script}
+The goal is to extract this data: {user_instruction}
 
 Use this string {output_path} as output path.
 Important:
@@ -76,23 +74,19 @@ Important:
     
     # Optional LLM models
     llm_models = [
-        "llama3.2:latest",
+        "llama3.1",
         "deepseek-coder-v2",
         "qwen2.5:14b",
-        "mistral:7b",
-        "codellama:latest",
-        "qwen2.5:1.5b",
-        "qwen2.5:1.5b-instruct",
-        "llama3.2:3b",
-        "llama3.2:3b-instruct-fp16"
+        "qwen2.5-coder:14b",
+        "qwen2.5:14b-",
     ]
     
     # Choose LLM model
-    selected_llm_model = st.selectbox("Select LLM Model", llm_models)
+    llm_model = st.selectbox("Select LLM Model", llm_models)
     
     if st.button("Generate Python Script"):
         base_url = initialize_ollama_connection()  # Connect to Ollama API
-        response_text = generate_answer(base_url, question, selected_llm_model)
+        response_text = generate_answer(base_url, question, llm_model)
         
         if "Error" in response_text:
             st.error(response_text)

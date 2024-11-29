@@ -4,6 +4,7 @@ import requests
 import logging
 import json
 
+
 # Set up basic logging configuration (optional)
 logging.basicConfig(level=logging.INFO)
 

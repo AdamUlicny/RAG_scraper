@@ -7,3 +7,5 @@ langchain
 pdfplumber
 PyMuPDF
 chromadb
+streamlit_pdf_viewer
+ollama
