@@ -44,14 +44,14 @@ if uploaded_file:
         # Store the page text for later use
     st.session_state["page_text"] = page_text
 
-#PC script_path = "/home/adam/CODE/RAG_scraper/scraper.py"
+#PC script_path = "/home/ulicny/GITHUB/RAG_scraper/scraper.py"
 #ntb
 script_path = "scraper.py"
 
 # Read the entire file into a string
 with open(script_path, "r") as file:
     original_script = file.read()
-
+input_path = "/home/ulicny/data.pdf"
 output_path = st.text_input("Specify Output Path (e.g., /tmp/scraped_data.csv or /tmp/scraped_data.json)")
 
 #Define Prompt for Data Extraction
@@ -61,11 +61,10 @@ if uploaded_file and "page_text" in st.session_state:
     
     user_instruction = st.text_input("Describe the data to extract from the PDF page")
     question = f"""
-You are tasked with updating a provided Python script to extract specified data from a PDF.
+You are tasked with writing a simple python script to extract specified data from a PDF.
 Sample page to understand the text structure: {context}
-This is the script to update: {original_script}
 The goal is to extract this data: {user_instruction}
-
+Use this strin {input_path} as output path.
 Use this string {output_path} as output path.
 Important:
 - provide well formatted codeblock, no instructions, no explainers, no comments.
@@ -106,93 +105,59 @@ Important:
 
 
 def clean_script_code(script_code):
-    """
-    Cleans the generated script code by:
-    - Preserving specific lines with newline characters in the input string
-    - Converting escaped quotes (\") back to normal quotes selectively
-    - Converting escaped newline (\n) and tab (\t) characters to actual newlines and tabs
-    - Converting escaped unicode characters (e.g., \u003c) to their corresponding symbols
-    - Handling multi-line strings and ensuring balanced quotes
-    
-    Args:
-        script_code (str): The input script code to clean
-        
-    Returns:
-        str: The cleaned script code
-    """
-    if not script_code:
-        return ""
-    
-    # Step 1: Preserve specific lines with newline characters
     lines = script_code.split("\n")
     cleaned_lines = []
-    for line in lines:
-        if "lines = text.split(\"\\n\")" in line:
-            cleaned_lines.append(line)
-        else:
-            # Convert other lines
-            line = line.replace("\\n", "\n")
-            line = re.sub(r'\\"', '"', line)
-            line = line.replace("\\t", "\t")
-            try:
-                line = bytes(line, "utf-8").decode("unicode_escape")
-            except UnicodeDecodeError:
-                pass
-            cleaned_lines.append(line)
-    
-    # Step 2: Handle balanced quotes and multi-line strings for the remaining lines
-    balanced_lines = []
-    open_quote = None
     current_line = ""
-    
-    for line in cleaned_lines:
-        if not line:
-            balanced_lines.append("")
-            continue
-            
-        if open_quote:
-            # We're inside a multi-line string
-            current_line += "\n" + line
-            
-            # Check if this line contains the closing quote
-            quote_positions = [i for i, char in enumerate(line) if char == open_quote]
-            for pos in quote_positions:
-                # Make sure it's not escaped
-                if pos > 0 and line[pos-1] != "\\":
-                    balanced_lines.append(current_line)
-                    current_line = line[pos+1:]
-                    open_quote = None
-                    break
-                    
-            if open_quote:  # Still open
+    string_state = "outside_string"
+    quote_char = None
+
+    for line in lines:
+        if string_state == "outside_string":
+            if "lines = text.split(\"\\n\")" in line:
+                cleaned_lines.append(line)
                 continue
-                
+            stripped_line = line.strip()
+            if stripped_line.startswith("'''") or stripped_line.startswith('"""'):
+                if stripped_line.endswith("'''") or stripped_line.endswith('"""'):
+                    # Single-line triple-quoted string
+                    cleaned_lines.append(line)
+                else:
+                    # Multi-line triple-quoted string
+                    current_line = line
+                    quote_char = stripped_line[:3]
+                    string_state = "inside_triple_quote"
+            elif stripped_line.startswith("'") or stripped_line.startswith('"'):
+                if stripped_line.endswith("'") or stripped_line.endswith('"'):
+                    # Single-line string
+                    cleaned_lines.append(line)
+                else:
+                    # Multi-line string
+                    current_line = line
+                    quote_char = stripped_line[0]
+                    string_state = "inside_single_quote" if quote_char == "'" else "inside_double_quote"
+            else:
+                # Non-string line
+                line = line.replace("\\n", "\n").replace("\\t", "\t")
+                cleaned_lines.append(line)
         else:
-            current_line = line
-            
-        # Look for new quote openings
-        for char in ['"', "'"]:
-            quote_positions = [i for i, c in enumerate(current_line) if c == char]
-            quote_count = len(quote_positions)
-            
-            if quote_count % 2 == 1:  # Odd number of quotes
-                # Find the position of the last quote
-                last_quote_pos = quote_positions[-1]
-                # Check if it's not escaped
-                if last_quote_pos == 0 or current_line[last_quote_pos-1] != "\\":
-                    open_quote = char
-                    break
-        
-        if not open_quote:
-            balanced_lines.append(current_line)
-        else:
-            current_line = line
-            
-    # Handle any remaining open quotes
-    if current_line:
-        balanced_lines.append(current_line)
-    
-    return "\n".join(balanced_lines)
+            current_line += "\n" + line
+            if string_state == "inside_single_quote":
+                if "'" in line and line[line.index("'")-1] != "\\":
+                    string_state = "outside_string"
+                    cleaned_lines.append(current_line)
+                    current_line = ""
+            elif string_state == "inside_double_quote":
+                if '"' in line and line[line.index('"')-1] != "\\":
+                    string_state = "outside_string"
+                    cleaned_lines.append(current_line)
+                    current_line = ""
+            elif string_state == "inside_triple_quote":
+                if stripped_line.endswith("'''") or stripped_line.endswith('"""'):
+                    string_state = "outside_string"
+                    cleaned_lines.append(current_line)
+                    current_line = ""
+
+    return "\n".join(cleaned_lines)
 
 # Execute the Generated Script with Subprocess
 def run_generated_script(script_code, pdf_file_path, output_path):

@@ -1,20 +1,18 @@
-import fitz  # PyMuPDF
-import csv # neccessary to output csv file
-uploaded_file = "/home/adam/Downloads/BGD_Animalia_Mammals_2015.pdf"
-output_path = "/home/adam/Downloads/extracted_data.csv"
+import fitz 
+import csv 
+uploaded_file = 
+output_path = 
 
 def extract_scientific_names_and_threats(uploaded_file, output_path):
     document = fitz.open(uploaded_file)
-    
-    # Prepare data to write to CSV
+
     with open(output_path, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(["Scientific Name", "Threat Category"])  # Write header
+        writer.writerow(["Scientific Name", "Threat Category"]) 
         
         for page_num in range(len(document)):
             page = document.load_page(page_num)
             
-            # Extract text from the page
             text = page.get_text("text")
             
             lines = text.split("\n")
@@ -25,10 +23,9 @@ def extract_scientific_names_and_threats(uploaded_file, output_path):
             for line in lines:
                 if "Scientific Name:" in line:
                     name_part = line.replace("Scientific Name:", "").strip()
-                    
-                    # Ensure that only the first two parts are captured, which should be the species name
+                
                     parts = name_part.split(' ')
-                    scientific_name = ' '.join(parts[:2])  # Take exactly the first two words
+                    scientific_name = ' '.join(parts[:2])
                     
                 elif "<" in line and ">" in line:
                     threat_category = line.strip("<>").strip()
@@ -36,5 +33,4 @@ def extract_scientific_names_and_threats(uploaded_file, output_path):
             if scientific_name is not None and threat_category is not None:
                 writer.writerow([scientific_name, threat_category])
 
-# Example usage
 extract_scientific_names_and_threats(uploaded_file, output_path)
